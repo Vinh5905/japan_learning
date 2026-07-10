@@ -1,0 +1,91 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum ReviewMode {
+  reading
+  writing
+}
+
+model Group {
+  id          String      @id @default(cuid())
+  sortOrder   Int         @map("order")
+  isCollapsed Boolean     @default(false) @map("is_collapsed")
+  kanjiItems  KanjiItem[]
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  @@index([sortOrder])
+  @@map("groups")
+}
+
+model KanjiItem {
+  id          String           @id @default(cuid())
+  groupId     String           @map("group_id")
+  group       Group            @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  sortOrder   Int              @map("order")
+  kanji       String           @unique
+  hanViet     String           @default("") @map("han_viet")
+  meaning     String           @default("")
+  kun         Json             @default("[]")
+  on          Json             @default("[]")
+  vocabulary  VocabularyItem[]
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+
+  @@index([groupId, sortOrder])
+  @@map("kanji_items")
+}
+
+model VocabularyItem {
+  id                String          @id @default(cuid())
+  kanjiItemId       String          @map("kanji_item_id")
+  kanjiItem         KanjiItem       @relation(fields: [kanjiItemId], references: [id], onDelete: Cascade)
+  sortOrder         Int             @map("order")
+  word              String          @default("")
+  hanViet           String          @default("") @map("han_viet")
+  type              String          @default("danh từ")
+  reading           String          @default("")
+  meaning           String          @default("")
+  exampleJapanese   Json            @default("[]") @map("example_japanese")
+  exampleVietnamese String          @default("") @map("example_vietnamese")
+  attempts          ReviewAttempt[]
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+
+  @@index([kanjiItemId, sortOrder])
+  @@index([kanjiItemId, word])
+  @@map("vocabulary_items")
+}
+
+model UserColumnSetting {
+  id        String   @id @default(cuid())
+  columnKey String   @unique @map("column_key")
+  isVisible Boolean  @default(true) @map("is_visible")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("user_column_settings")
+}
+
+model ReviewAttempt {
+  id               String         @id @default(cuid())
+  vocabularyItemId String         @map("vocabulary_item_id")
+  vocabularyItem   VocabularyItem @relation(fields: [vocabularyItemId], references: [id], onDelete: Cascade)
+  mode             ReviewMode
+  answer           String
+  isCorrect        Boolean        @map("is_correct")
+  createdAt        DateTime       @default(now()) @map("created_at")
+
+  @@index([vocabularyItemId, createdAt])
+  @@map("review_attempts")
+}
