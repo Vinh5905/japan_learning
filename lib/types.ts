@@ -45,6 +45,7 @@ export type VocabularyRow = {
   meaning: string;
   exampleJapanese: ExampleToken[];
   exampleVietnamese: string;
+  ankiNoteId: number | null;
 };
 
 export type KanjiBlock = {

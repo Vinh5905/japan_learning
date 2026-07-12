@@ -186,6 +186,14 @@ Current vocabulary Han Viet behavior:
 - Migration `20260710000100_add_vocabulary_han_viet` adds this column with a non-null empty-string default.
 - `scripts/backfill-vocabulary-han-viet.mjs` fills empty vocabulary `han_viet` values from existing kanji Hán Việt readings plus a fallback map for kanji that appear only inside vocabulary words.
 - Use `npm run db:backfill-vocab-han-viet -- --dry-run` before writing, then `npm run db:backfill-vocab-han-viet` to fill empty values. This script does not clear or delete user data.
+
+Current Anki behavior:
+
+- Anki save is per `VocabularyItem`, not per `KanjiItem`.
+- `vocabulary_items.anki_note_id` stores the Anki note id for that vocabulary row. It must stay `BIGINT` in Postgres because Anki note ids are large timestamp-like numbers that can exceed 32-bit `INTEGER`.
+- `buildAnkiFields` keeps the existing Anki field name `Kanji` for compatibility, but its value must be the full vocabulary word (`VocabularyItem.word`), not the parent kanji.
+- Once a vocabulary row has `ankiNoteId`, the UI shows a locked `Saved` badge and the save button is unavailable for that row.
+- `/api/anki/reset` requires two confirmation flags. It deletes all notes in the configured Anki deck when the deck still exists, then clears every `vocabulary_items.anki_note_id`. If the deck was already deleted in Anki, it still clears local saved state.
 - `user_column_settings`
   - `id`
   - `columnKey`

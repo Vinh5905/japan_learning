@@ -43,6 +43,8 @@ The app uses English UI labels and supports Vietnamese learning content. Data is
 - Answer status uses background plus icons only: wrong answers show `X`, correct answers show a check, and the table border stays unchanged.
 - Pressing Enter inside the answer input does not trigger row dragging, so wrong answers do not flash a drag outline or dim the kanji details cell.
 - Demo seeding and test resets are disabled by default so the real local database is not deleted accidentally.
+- Anki export saves one note per vocabulary row. Saved rows show a locked `Saved` badge and cannot be clicked again from the table.
+- The Anki dialog includes `Reset saved data`, guarded by two confirmation dialogs. It deletes all notes in the configured Anki deck if the deck exists, then clears all local Saved badges.
 
 ## Commands
 

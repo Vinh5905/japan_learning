@@ -57,14 +57,16 @@ model VocabularyItem {
   type              String          @default("danh từ")
   reading           String          @default("")
   meaning           String          @default("")
-  exampleJapanese   Json            @default("[]") @map("example_japanese")
+  exampleJapanese   Json             @default("[]") @map("example_japanese")
   exampleVietnamese String          @default("") @map("example_vietnamese")
+  ankiNoteId        BigInt?          @map("anki_note_id")
   attempts          ReviewAttempt[]
   createdAt         DateTime        @default(now()) @map("created_at")
   updatedAt         DateTime        @updatedAt @map("updated_at")
 
   @@index([kanjiItemId, sortOrder])
   @@index([kanjiItemId, word])
+  @@index([ankiNoteId])
   @@map("vocabulary_items")
 }
 

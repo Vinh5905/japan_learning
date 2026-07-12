@@ -27,6 +27,7 @@ import {
   ChevronsRight,
   Clipboard,
   Eye,
+  Layers,
   Pencil,
   Plus,
   RefreshCw,
@@ -140,6 +141,17 @@ const ANSWER_STORAGE_KEY = "kanji-spreadsheet-answer-state:v1";
 
 const EMPTY_IMPORT = "";
 
+type AnkiStatus = {
+  reachable: boolean;
+  deckReady: boolean;
+  modelReady: boolean;
+  message?: string;
+  deckName?: string;
+  modelName?: string;
+};
+
+type AnkiResetStep = "none" | "first" | "second";
+
 export function KanjiApp({ initialData }: { initialData: TableData }) {
   const [data, setData] = useState<TableData>(() =>
     withAllGroupsCollapsed(initialData, true),
@@ -165,6 +177,12 @@ export function KanjiApp({ initialData }: { initialData: TableData }) {
   const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
   const [editDraft, setEditDraft] = useState<EditDraft>(EMPTY_EDIT_DRAFT);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+  const [ankiStatus, setAnkiStatus] = useState<AnkiStatus | null>(null);
+  const [isAnkiDialogOpen, setIsAnkiDialogOpen] = useState(false);
+  const [ankiResetStep, setAnkiResetStep] = useState<AnkiResetStep>("none");
+  const [isAnkiBusy, setIsAnkiBusy] = useState(false);
+  const [ankiMessage, setAnkiMessage] = useState("");
+  const [savingAnkiIds, setSavingAnkiIds] = useState<Set<string>>(new Set());
   const [hoveredKanjiId, setHoveredKanjiId] = useState<string | null>(null);
   const [hoveredVocabularyId, setHoveredVocabularyId] = useState<string | null>(
     null,
@@ -484,6 +502,129 @@ export function KanjiApp({ initialData }: { initialData: TableData }) {
       setMessage(error instanceof Error ? error.message : "Failed to delete item");
     } finally {
       setIsBusy(false);
+    }
+  }
+
+  const refreshAnkiStatus = useCallback(async () => {
+    setAnkiStatus(await fetchAnkiStatus());
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    fetchAnkiStatus().then((status) => {
+      if (active) {
+        setAnkiStatus(status);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const ankiReady = Boolean(ankiStatus?.reachable && ankiStatus?.deckReady && ankiStatus?.modelReady);
+  const ankiProgress = useMemo(() => {
+    let total = 0;
+    let saved = 0;
+
+    for (const group of data.groups) {
+      for (const kanji of group.kanjiItems) {
+        for (const row of kanji.vocabulary) {
+          total += 1;
+          if (row.ankiNoteId) {
+            saved += 1;
+          }
+        }
+      }
+    }
+
+    return { total, saved };
+  }, [data.groups]);
+
+  async function setupAnki() {
+    setIsAnkiBusy(true);
+    setAnkiMessage("");
+    try {
+      const response = await requestJson<{
+        ok: boolean;
+        steps?: string[];
+        message?: string;
+      }>("/api/anki/setup", { method: "POST" });
+      setAnkiMessage(response.steps?.join(" ") || "Anki setup complete.");
+      await refreshAnkiStatus();
+    } catch (error) {
+      setAnkiMessage(error instanceof Error ? error.message : "Anki setup failed");
+    } finally {
+      setIsAnkiBusy(false);
+    }
+  }
+
+  async function syncAnki() {
+    setIsAnkiBusy(true);
+    setAnkiMessage("");
+    try {
+      await requestJson<{ ok: boolean }>("/api/anki/sync", { method: "POST" });
+      setAnkiMessage("Anki sync started in Anki desktop.");
+    } catch (error) {
+      setAnkiMessage(error instanceof Error ? error.message : "Anki sync failed");
+    } finally {
+      setIsAnkiBusy(false);
+    }
+  }
+
+  async function resetAnkiSavedData() {
+    setIsAnkiBusy(true);
+    setAnkiMessage("");
+    try {
+      const response = await requestJson<{
+        ok: boolean;
+        deckFound: boolean;
+        deletedNotes: number;
+        clearedRows: number;
+      }>("/api/anki/reset", {
+        method: "POST",
+        body: JSON.stringify({
+          confirmDeckReset: true,
+          confirmDatabaseReset: true,
+        }),
+      });
+
+      setData(clearAllVocabularyAnkiIds);
+      setAnkiResetStep("none");
+      setAnkiMessage(
+        response.deckFound
+          ? `Reset complete. Deleted ${response.deletedNotes} Anki note(s) and cleared ${response.clearedRows} saved row(s).`
+          : `Reset complete. Deck was not found in Anki; cleared ${response.clearedRows} saved row(s).`,
+      );
+      await refreshAnkiStatus();
+    } catch (error) {
+      setAnkiMessage(
+        error instanceof Error ? error.message : "Failed to reset Anki saved data",
+      );
+    } finally {
+      setIsAnkiBusy(false);
+    }
+  }
+
+  async function saveToAnki(row: VocabularyRow) {
+    setSavingAnkiIds((current) => new Set(current).add(row.id));
+    try {
+      const response = await requestJson<{ ok: boolean; ankiNoteId?: number; message?: string }>(
+        "/api/anki/save",
+        {
+          method: "POST",
+          body: JSON.stringify({ vocabularyId: row.id }),
+        },
+      );
+      setData((current) => replaceVocabularyAnkiId(current, row.id, response.ankiNoteId ?? null));
+      setMessage(`Saved "${row.word}" to Anki.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Failed to save to Anki");
+    } finally {
+      setSavingAnkiIds((current) => {
+        const next = new Set(current);
+        next.delete(row.id);
+        return next;
+      });
     }
   }
 
@@ -832,6 +973,194 @@ export function KanjiApp({ initialData }: { initialData: TableData }) {
           >
             <RefreshCw size={16} />
           </Button>
+          <Dialog open={isAnkiDialogOpen} onOpenChange={setIsAnkiDialogOpen}>
+            <DialogTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                title="Anki connection status and setup"
+              >
+                <Layers size={16} />
+                Anki
+                <span
+                  className={[
+                    "anki-status-dot",
+                    ankiReady
+                      ? "is-ready"
+                      : ankiStatus?.reachable
+                        ? "is-error"
+                        : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                />
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="anki-dialog">
+              <DialogHeader>
+                <DialogTitle>Anki connection</DialogTitle>
+                <DialogDescription>
+                  Save each vocabulary row as its own Anki note through AnkiConnect.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="anki-status-grid">
+                <div className="anki-status-card">
+                  <span className="anki-status-label">Connection</span>
+                  <strong>{ankiStatus?.reachable ? "Connected" : "Not connected"}</strong>
+                  <p>{ankiStatus?.reachable ? "AnkiConnect is reachable." : "Open Anki and enable AnkiConnect."}</p>
+                </div>
+                <div className="anki-status-card">
+                  <span className="anki-status-label">Deck</span>
+                  <strong>{ankiStatus?.deckReady ? ankiStatus.deckName : "Needs setup"}</strong>
+                  <p>{ankiStatus?.deckReady ? "Vocabulary notes will be saved here." : "Run setup to create the deck."}</p>
+                </div>
+                <div className="anki-status-card">
+                  <span className="anki-status-label">Saved</span>
+                  <strong>
+                    {ankiProgress.saved}/{ankiProgress.total}
+                  </strong>
+                  <p>Saved rows become locked in the Anki column.</p>
+                </div>
+              </div>
+              <div className="anki-summary">
+                <span
+                  className={[
+                    "anki-status-dot",
+                    ankiReady
+                      ? "is-ready"
+                      : ankiStatus?.reachable
+                        ? "is-error"
+                        : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                />
+                {ankiStatus
+                  ? ankiReady
+                    ? `Ready: note type "${ankiStatus.modelName}".`
+                    : ankiStatus.reachable
+                      ? "Anki is reachable, but deck or note type is not ready."
+                      : ankiStatus.message || "Cannot reach Anki."
+                  : "Checking Anki..."}
+              </div>
+              <div className="toolbar">
+                <Button
+                  type="button"
+                  onClick={setupAnki}
+                  disabled={isAnkiBusy}
+                >
+                  {isAnkiBusy ? "Setting up…" : "Setup deck & note type"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={syncAnki}
+                  disabled={isAnkiBusy || !ankiReady}
+                >
+                  <RefreshCw size={15} />
+                  Sync to AnkiWeb
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={refreshAnkiStatus}
+                  disabled={isAnkiBusy}
+                >
+                  Check again
+                </Button>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={() => setAnkiResetStep("first")}
+                  disabled={isAnkiBusy || !ankiStatus?.reachable}
+                  title="Delete all notes in the Anki deck and clear saved state in this app"
+                >
+                  <Trash2 size={15} />
+                  Reset saved data
+                </Button>
+              </div>
+              {ankiMessage ? (
+                <Feedback message={ankiMessage} errors={[]} />
+              ) : null}
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsAnkiDialogOpen(false)}
+                >
+                  Close
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+          <Dialog
+            open={ankiResetStep === "first"}
+            onOpenChange={(open) => setAnkiResetStep(open ? "first" : "none")}
+          >
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Reset Anki saved data?</DialogTitle>
+                <DialogDescription>
+                  This will delete every note in the configured Anki deck if the deck
+                  still exists, then clear all Saved badges in this app.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setAnkiResetStep("none")}
+                  disabled={isAnkiBusy}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={() => setAnkiResetStep("second")}
+                  disabled={isAnkiBusy}
+                >
+                  Continue
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+          <Dialog
+            open={ankiResetStep === "second"}
+            onOpenChange={(open) => setAnkiResetStep(open ? "second" : "none")}
+          >
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Final confirmation</DialogTitle>
+                <DialogDescription>
+                  This cannot be undone from the app. All cards in the Anki deck
+                  {" "}
+                  <strong>{ankiStatus?.deckName || "Kanji Learning"}</strong>{" "}
+                  will be removed if that deck exists, and every vocabulary row
+                  will return to the unsaved state.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setAnkiResetStep("none")}
+                  disabled={isAnkiBusy}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={resetAnkiSavedData}
+                  disabled={isAnkiBusy}
+                >
+                  {isAnkiBusy ? "Resetting..." : "Reset everything"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
       </section>
       {!isImportOpen ? <Feedback message={message} errors={[]} /> : null}
@@ -946,12 +1275,15 @@ export function KanjiApp({ initialData }: { initialData: TableData }) {
                       {columnHeader(column.key, column.label)}
                     </th>
                   ))}
+                  <th className="col-anki" title="Save to Anki">
+                    Anki
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {data.groups.length === 0 ? (
                   <tr>
-                    <td colSpan={visibleColumns.length} className="empty-cell">
+                    <td colSpan={visibleColumns.length + 1} className="empty-cell">
                       No kanji imported yet.
                     </td>
                   </tr>
@@ -985,6 +1317,9 @@ export function KanjiApp({ initialData }: { initialData: TableData }) {
                         onMoveItem={moveItem}
                         onEdit={openEdit}
                         onDelete={setDeleteTarget}
+                        onSaveAnki={saveToAnki}
+                        ankiReady={ankiReady}
+                        savingAnkiIds={savingAnkiIds}
                       />
                     ),
                   )
@@ -1031,6 +1366,9 @@ function ExpandedGroupRows({
   onMoveItem,
   onEdit,
   onDelete,
+  onSaveAnki,
+  ankiReady,
+  savingAnkiIds,
 }: {
   group: KanjiGroup;
   groupIndex: number;
@@ -1048,6 +1386,9 @@ function ExpandedGroupRows({
   onMoveItem: MoveItemHandler;
   onEdit: EditHandler;
   onDelete: DeleteHandler;
+  onSaveAnki: (row: VocabularyRow) => void;
+  ankiReady: boolean;
+  savingAnkiIds: Set<string>;
 }) {
   const rowCount = getGroupRowCount(group);
 
@@ -1070,7 +1411,7 @@ function ExpandedGroupRows({
           />
         ) : null}
         <td
-          colSpan={Math.max(visibleColumns.length - leadingCells, 1)}
+          colSpan={Math.max(visibleColumns.length - leadingCells + 1, 1)}
           className="empty-cell"
         >
           Empty group
@@ -1285,6 +1626,16 @@ function ExpandedGroupRows({
                   ) : null}
                 </td>
               ) : null}
+              <td className="col-anki anki-cell">
+                {row ? (
+                  <AnkiCell
+                    row={row}
+                    ready={ankiReady}
+                    saving={savingAnkiIds.has(row.id)}
+                    onSave={() => onSaveAnki(row)}
+                  />
+                ) : null}
+              </td>
           </SortableVocabularyTr>
         );
       })}
@@ -1319,7 +1670,7 @@ function CollapsedGroupRow({
   const leadingCells =
     Number(visibleColumns.includes("collapse")) +
     Number(visibleColumns.includes("group"));
-  const summaryColSpan = Math.max(visibleColumns.length - leadingCells, 1);
+  const summaryColSpan = Math.max(visibleColumns.length - leadingCells + 1, 1);
 
   return (
     <tr
@@ -1364,6 +1715,45 @@ function CollapsedGroupRow({
         </div>
       </td>
     </tr>
+  );
+}
+
+function AnkiCell({
+  row,
+  ready,
+  saving,
+  onSave,
+}: {
+  row: VocabularyRow;
+  ready: boolean;
+  saving: boolean;
+  onSave: () => void;
+}) {
+  if (row.ankiNoteId) {
+    return (
+      <span
+        className="anki-saved-badge"
+        title={`Saved to Anki (note ${row.ankiNoteId}).`}
+        aria-disabled="true"
+      >
+        <Check size={14} />
+        Saved
+      </span>
+    );
+  }
+
+  return (
+    <Button
+      className="anki-save-button"
+      type="button"
+      variant="outline"
+      size="sm"
+      title={ready ? "Save this word to Anki" : "Anki is not ready. Open Anki setup first."}
+      onClick={onSave}
+      disabled={!ready || saving}
+    >
+      {saving ? "Saving…" : "Save to Anki"}
+    </Button>
   );
 }
 
@@ -2440,13 +2830,71 @@ async function requestJson<T = unknown>(url: string, init?: RequestInit): Promis
       ...init?.headers,
     },
   });
-  const data = await response.json();
+  const text = await response.text();
+  let data: unknown = {};
+
+  if (text.trim()) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { message: text };
+    }
+  }
 
   if (!response.ok) {
-    const error = new Error(data.message || "Request failed") as ApiError;
-    error.errors = data.errors;
+    const payload = data as { message?: string; errors?: ApiError["errors"] };
+    const error = new Error(payload.message || "Request failed") as ApiError;
+    error.errors = payload.errors;
     throw error;
   }
 
-  return data;
+  return data as T;
+}
+
+function replaceVocabularyAnkiId(
+  data: TableData,
+  vocabularyId: string,
+  ankiNoteId: number | null,
+): TableData {
+  return {
+    ...data,
+    groups: data.groups.map((group) => ({
+      ...group,
+      kanjiItems: group.kanjiItems.map((kanji) => ({
+        ...kanji,
+        vocabulary: kanji.vocabulary.map((row) =>
+          row.id === vocabularyId ? { ...row, ankiNoteId } : row,
+        ),
+      })),
+    })),
+  };
+}
+
+function clearAllVocabularyAnkiIds(data: TableData): TableData {
+  return {
+    ...data,
+    groups: data.groups.map((group) => ({
+      ...group,
+      kanjiItems: group.kanjiItems.map((kanji) => ({
+        ...kanji,
+        vocabulary: kanji.vocabulary.map((row) => ({
+          ...row,
+          ankiNoteId: null,
+        })),
+      })),
+    })),
+  };
+}
+
+async function fetchAnkiStatus(): Promise<AnkiStatus> {
+  try {
+    return await requestJson<AnkiStatus & { ok: boolean }>("/api/anki/status");
+  } catch (error) {
+    return {
+      reachable: false,
+      deckReady: false,
+      modelReady: false,
+      message: error instanceof Error ? error.message : "Anki check failed",
+    };
+  }
 }

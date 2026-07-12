@@ -4,6 +4,12 @@ import { Prisma } from "@/lib/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { mergeUniqueStrings } from "@/lib/study";
 import { VOCABULARY_TYPES } from "@/lib/types";
+import {
+  AnkiConnectError,
+  ankiDeleteNotes,
+  ankiUpdateNoteFields,
+  buildAnkiFields,
+} from "@/lib/anki";
 import type {
   ColumnKey,
   EditableItemType,
@@ -242,6 +248,12 @@ export async function updateItem(request: {
         meaning: stringValue(request.data.meaning),
       },
     });
+
+    // Mirror the edit into the linked Anki note, if one exists. Fire-and-forget
+    // from the user's perspective: a failure is logged, not surfaced, so the
+    // DB edit still succeeds and the row keeps its "saved" badge. The user can
+    // re-save from the Save to Anki button to retry.
+    void pushVocabularyToAnki(request.id);
   }
 
   return {
@@ -254,17 +266,21 @@ export async function deleteItem(request: {
   type: EditableItemType;
   id: string;
 }) {
+  let ankiVocabularyId: string | null = null;
+  let ankiKanjiItemId: string | null = null;
+
   await prisma.$transaction(async (tx) => {
     if (request.type === "vocabulary") {
       const current = await tx.vocabularyItem.findUnique({
         where: { id: request.id },
-        select: { kanjiItemId: true },
+        select: { kanjiItemId: true, ankiNoteId: true },
       });
 
       if (!current) {
         return;
       }
 
+      ankiVocabularyId = current.ankiNoteId ? request.id : null;
       await tx.vocabularyItem.delete({ where: { id: request.id } });
       await reorderVocabularyForKanji(tx, current.kanjiItemId);
     }
@@ -279,11 +295,21 @@ export async function deleteItem(request: {
         return;
       }
 
+      ankiKanjiItemId = request.id;
       await tx.kanjiItem.delete({ where: { id: request.id } });
       await reorderKanjiForGroup(tx, current.groupId);
       await deleteEmptyGroupsAndReorder(tx);
     }
   });
+
+  // Remove the corresponding Anki note(s) only after the DB commit succeeded, so
+  // a failed Anki call cannot leave the app with a row that no longer exists.
+  if (ankiVocabularyId) {
+    await deleteAnkiNotesForVocabulary(ankiVocabularyId);
+  }
+  if (ankiKanjiItemId) {
+    await deleteAnkiNotesForKanji(ankiKanjiItemId);
+  }
 
   return {
     ok: true as const,
@@ -607,6 +633,7 @@ function serializeKanjiItem(item: {
     meaning: string;
     exampleJapanese: unknown;
     exampleVietnamese: string;
+    ankiNoteId: number | bigint | null;
   }>;
 }): KanjiBlock {
   return {
@@ -632,6 +659,7 @@ function serializeVocabularyItem(item: {
   meaning: string;
   exampleJapanese: unknown;
   exampleVietnamese: string;
+  ankiNoteId: number | bigint | null;
 }): VocabularyRow {
   return {
     id: item.id,
@@ -643,6 +671,7 @@ function serializeVocabularyItem(item: {
     meaning: item.meaning,
     exampleJapanese: asExampleTokens(item.exampleJapanese),
     exampleVietnamese: item.exampleVietnamese,
+    ankiNoteId: numberOrNull(item.ankiNoteId),
   };
 }
 
@@ -671,6 +700,10 @@ function stringValue(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function numberOrNull(value: number | bigint | null) {
+  return value === null ? null : Number(value);
+}
+
 function vocabularyTypeValue(value: unknown): VocabularyType {
   return typeof value === "string" &&
     VOCABULARY_TYPES.includes(value as VocabularyType)
@@ -694,4 +727,88 @@ function arrayMoveLocal<T>(items: T[], oldIndex: number, newIndex: number) {
   const [item] = next.splice(oldIndex, 1);
   next.splice(newIndex, 0, item);
   return next;
+}
+
+// Anki push/pull helpers. These never throw into the caller's DB flow: an Anki
+// outage must not block editing or deleting a word in the app. They log the
+// failure so the user can re-save later.
+
+export async function pushVocabularyToAnki(vocabularyId: string): Promise<void> {
+  const row = await prisma.vocabularyItem.findUnique({
+    where: { id: vocabularyId },
+    include: { kanjiItem: { select: { kanji: true, hanViet: true } } },
+  });
+
+  if (!row || !row.ankiNoteId) {
+    return;
+  }
+
+  try {
+    await ankiUpdateNoteFields({
+      id: Number(row.ankiNoteId),
+      fields: buildAnkiFields({
+        kanji: row.kanjiItem.kanji,
+        word: row.word,
+        hanViet: row.hanViet || row.kanjiItem.hanViet,
+        type: row.type as Parameters<typeof buildAnkiFields>[0]["type"],
+        reading: row.reading,
+        meaning: row.meaning,
+        exampleJapanese:
+          row.exampleJapanese as Parameters<typeof buildAnkiFields>[0]["exampleJapanese"],
+        exampleVietnamese: row.exampleVietnamese,
+      }),
+    });
+  } catch (error) {
+    logAnkiError("update note", error);
+  }
+}
+
+export async function deleteAnkiNotesForVocabulary(
+  vocabularyId: string,
+): Promise<void> {
+  const row = await prisma.vocabularyItem.findUnique({
+    where: { id: vocabularyId },
+    select: { ankiNoteId: true },
+  });
+
+  if (!row?.ankiNoteId) {
+    return;
+  }
+
+  try {
+    await ankiDeleteNotes([Number(row.ankiNoteId)]);
+  } catch (error) {
+    logAnkiError("delete note", error);
+  }
+}
+
+export async function deleteAnkiNotesForKanji(kanjiItemId: string): Promise<void> {
+  const rows = await prisma.vocabularyItem.findMany({
+    where: { kanjiItemId, NOT: { ankiNoteId: null } },
+    select: { ankiNoteId: true },
+  });
+  const noteIds = rows
+    .map((row) => row.ankiNoteId)
+    .filter((id): id is bigint => id !== null)
+    .map((id) => Number(id));
+
+  if (noteIds.length === 0) {
+    return;
+  }
+
+  try {
+    await ankiDeleteNotes(noteIds);
+  } catch (error) {
+    logAnkiError("delete notes", error);
+  }
+}
+
+function logAnkiError(action: string, error: unknown) {
+  const message =
+    error instanceof AnkiConnectError
+      ? error.message
+      : error instanceof Error
+        ? error.message
+        : String(error);
+  console.warn(`[anki] failed to ${action}: ${message}`);
 }

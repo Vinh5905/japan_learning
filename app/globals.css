@@ -363,6 +363,112 @@ textarea {
   min-width: 170px;
 }
 
+.col-anki {
+  width: 110px;
+  min-width: 110px;
+}
+
+.anki-cell {
+  text-align: center;
+  vertical-align: middle;
+}
+
+.anki-save-button {
+  border-color: #d88b8b !important;
+  background: #fff1f1 !important;
+  color: #9f1f1f !important;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.anki-save-button:hover:not(:disabled) {
+  border-color: #c0392b !important;
+  background: #fde2e2 !important;
+  color: #842029 !important;
+}
+
+.anki-saved-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 82px;
+  border: 1px solid #7bc68e;
+  border-radius: 999px;
+  background: var(--success-bg);
+  color: #2f6f44;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 7px 10px;
+  pointer-events: none;
+  user-select: none;
+}
+
+.anki-status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #94a3b8;
+}
+
+.anki-status-dot.is-ready {
+  background: #2f6f44;
+}
+
+.anki-status-dot.is-error {
+  background: #c0392b;
+}
+
+.anki-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #475569;
+}
+
+.anki-dialog {
+  max-width: 620px;
+}
+
+.anki-status-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.anki-status-card {
+  border: 1px solid #d8dee6;
+  border-radius: 8px;
+  background: #fbfcfd;
+  padding: 12px;
+}
+
+.anki-status-card strong {
+  display: block;
+  margin-top: 3px;
+  color: #111827;
+  font-size: 15px;
+  line-height: 1.25;
+}
+
+.anki-status-card p {
+  margin: 7px 0 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.anki-status-label {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
 td.col-word,
 td.col-wordHanViet,
 td.col-type,
@@ -854,6 +960,10 @@ rt {
 
   .kanji-table {
     min-width: 980px;
+  }
+
+  .anki-status-grid {
+    grid-template-columns: 1fr;
   }
 }
 
