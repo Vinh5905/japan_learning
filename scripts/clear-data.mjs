@@ -22,6 +22,9 @@ try {
   const before = await countRows();
 
   await pool.query("BEGIN");
+  await pool.query('DELETE FROM "standalone_vocabulary_attempts"');
+  await pool.query('DELETE FROM "standalone_vocabulary_items"');
+  await pool.query('DELETE FROM "vocab_groups"');
   await pool.query('DELETE FROM "review_attempts"');
   await pool.query('DELETE FROM "vocabulary_items"');
   await pool.query('DELETE FROM "kanji_items"');
@@ -49,6 +52,9 @@ async function countRows() {
       (SELECT COUNT(*)::int FROM "kanji_items") AS kanji_items,
       (SELECT COUNT(*)::int FROM "vocabulary_items") AS vocabulary_items,
       (SELECT COUNT(*)::int FROM "review_attempts") AS review_attempts,
+      (SELECT COUNT(*)::int FROM "vocab_groups") AS vocab_groups,
+      (SELECT COUNT(*)::int FROM "standalone_vocabulary_items") AS standalone_vocabulary_items,
+      (SELECT COUNT(*)::int FROM "standalone_vocabulary_attempts") AS standalone_vocabulary_attempts,
       (SELECT COUNT(*)::int FROM "user_column_settings") AS user_column_settings
   `);
 

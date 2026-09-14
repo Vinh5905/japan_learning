@@ -207,6 +207,72 @@ Current Anki behavior:
   - `isCorrect`
   - `createdAt`
 
+## Standalone Vocabulary Area
+
+The app now has two top-level learning areas:
+
+- `Kanji`: the existing kanji spreadsheet and kanji-owned vocabulary rows.
+- `Vocabulary`: standalone vocabulary lesson groups that are independent from kanji groups.
+
+Standalone vocabulary must remain separate from the existing `VocabularyItem` model because `VocabularyItem` belongs to a `KanjiItem`.
+
+Standalone vocabulary data model:
+
+- `vocab_groups`
+  - `id`
+  - `name`
+  - `order`
+  - `isCollapsed`
+  - `createdAt`
+  - `updatedAt`
+- `standalone_vocabulary_items`
+  - `id`
+  - `groupId`
+  - `order`
+  - `word`
+  - `hanViet`
+  - `type`
+  - `reading`
+  - `meaning`
+  - `examples` JSON array
+  - `ankiNoteId`
+  - `createdAt`
+  - `updatedAt`
+- `standalone_vocabulary_attempts`
+  - `id`
+  - `vocabularyItemId`
+  - `mode`
+  - `answer`
+  - `isCorrect`
+  - `createdAt`
+
+Standalone vocabulary behavior:
+
+- Vocabulary groups represent lessons, not kanji visual groups.
+- Groups are collapsed on first page load.
+- Group names are editable inline.
+- Default group names are `New group`, `New group 1`, `New group 2`, etc.
+- Import creates exactly one new vocabulary group per import.
+- The AI prompt for vocabulary asks the AI to put all supplied words into that one group.
+- Each vocabulary word supports 1-3 examples. Prefer 2-3 examples when the source allows it.
+- Each example stores furigana token data in `examples[].japanese` and Vietnamese translation in `examples[].vietnamese`.
+- Example tokens containing kanji must include hiragana `reading`, including non-target words.
+- Word edit updates only word, Han Viet, type, reading, and meaning. Examples are not edited in the simple edit dialog.
+- Deleting is only available for words, not vocabulary groups. Empty vocabulary groups are removed automatically after moves/deletes.
+- Up/down movement can move words within a group and across adjacent groups.
+- Reading/Writing answer states use a separate browser localStorage key from kanji answers.
+
+Standalone vocabulary Anki behavior:
+
+- Uses a separate deck and note type from kanji:
+  - Deck: `Vocabulary Learning`
+  - Note type: `Standalone Vocabulary`
+- Anki front shows both `Word` and `Hiragana`.
+- Anki back shows Hán Việt, meaning, type, and up to three examples.
+- `standalone_vocabulary_items.anki_note_id` stores the Anki note id as `BIGINT`.
+- `/api/vocab/anki/reset` requires two confirmation flags. It deletes all notes in the standalone vocabulary deck when the deck still exists, then clears every `standalone_vocabulary_items.anki_note_id`.
+- Kanji Anki routes under `/api/anki/*` and vocabulary Anki routes under `/api/vocab/anki/*` must not be mixed.
+
 For MVP without user accounts, column settings may be global.
 
 ## Implementation Order

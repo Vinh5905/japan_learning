@@ -26,6 +26,25 @@ export type VocabularyImportItem = {
   };
 };
 
+export type VocabularyExample = {
+  japanese: ExampleToken[];
+  vietnamese: string;
+};
+
+export type StandaloneVocabularyImportItem = {
+  word: string;
+  han_viet: string;
+  type: VocabularyType;
+  reading: string;
+  meaning: string;
+  examples: VocabularyExample[];
+};
+
+export type StandaloneVocabularyImportPayload = {
+  group_name?: string;
+  vocabulary: StandaloneVocabularyImportItem[];
+};
+
 export type KanjiImportItem = {
   kanji: string;
   han_viet: string;
@@ -46,6 +65,31 @@ export type VocabularyRow = {
   exampleJapanese: ExampleToken[];
   exampleVietnamese: string;
   ankiNoteId: number | null;
+};
+
+export type StandaloneVocabularyRow = {
+  id: string;
+  groupId: string;
+  sortOrder: number;
+  word: string;
+  hanViet: string;
+  type: VocabularyType;
+  reading: string;
+  meaning: string;
+  examples: VocabularyExample[];
+  ankiNoteId: number | null;
+};
+
+export type StandaloneVocabularyGroup = {
+  id: string;
+  name: string;
+  sortOrder: number;
+  isCollapsed: boolean;
+  vocabulary: StandaloneVocabularyRow[];
+};
+
+export type StandaloneVocabularyData = {
+  groups: StandaloneVocabularyGroup[];
 };
 
 export type KanjiBlock = {
@@ -88,6 +132,8 @@ export type ColumnKey =
 export type StudyMode = "study" | "reading" | "writing";
 
 export type MoveTargetType = "group" | "kanji" | "vocabulary";
+
+export type StandaloneVocabularyMoveTargetType = "vocabGroup" | "standaloneVocabulary";
 
 export type MoveDirection = "up" | "down";
 
@@ -136,4 +182,13 @@ export type ImportCommitRequest = {
   raw: string;
   kanjiDecisions?: Record<string, KanjiDuplicateDecision>;
   vocabularyDecisions?: Record<string, VocabularyDuplicateDecision>;
+};
+
+export type StandaloneVocabularyImportPreview = {
+  groupName: string;
+  vocabulary: StandaloneVocabularyImportItem[];
+  summary: {
+    vocabulary: number;
+    examples: number;
+  };
 };

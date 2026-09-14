@@ -130,6 +130,43 @@ textarea {
     );
 }
 
+.app-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.area-switcher {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid var(--grid-border);
+  background: #fff;
+  padding: 14px 16px;
+  box-shadow: 0 1px 0 #0000000d;
+}
+
+.area-switcher h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 820;
+  letter-spacing: 0;
+  line-height: 1.1;
+}
+
+.area-switcher p {
+  margin: 4px 0 0;
+  color: #4b5563;
+  font-size: 13px;
+}
+
+.area-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .app-header,
 .controls-band {
   border: 1px solid var(--grid-border);
@@ -167,7 +204,9 @@ textarea {
 .column-control,
 .preview-title-row,
 .collapsed-content,
-.answer-box {
+.answer-box,
+.vocabulary-group-title-row,
+.group-name-edit {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -286,6 +325,10 @@ textarea {
 
 .review-table {
   min-width: 1180px;
+}
+
+.vocabulary-table {
+  min-width: 1320px;
 }
 
 .kanji-table th,
@@ -778,6 +821,59 @@ td.col-example {
   line-height: 1.6;
 }
 
+.example-stack {
+  display: grid;
+  gap: 12px;
+}
+
+.example-stack .example-lines + .example-lines {
+  border-top: 1px solid #e5e7eb;
+  padding-top: 10px;
+}
+
+.vocabulary-group-header td {
+  background: #e9eef4;
+}
+
+.vocabulary-group.is-collapsed .vocabulary-group-header td {
+  background: #dbe7f5;
+}
+
+.vocabulary-group-title-cell {
+  text-align: left !important;
+  padding: 8px 10px !important;
+}
+
+.vocabulary-group-title-row {
+  min-height: 36px;
+}
+
+.vocabulary-group-title-row > strong {
+  color: #111827;
+  font-size: 15px;
+  font-weight: 820;
+}
+
+.group-name-edit input {
+  min-height: 30px;
+  min-width: 220px;
+  border: 1px solid var(--grid-soft);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-weight: 680;
+}
+
+.vocabulary-row:hover td.col-word,
+.vocabulary-row:hover td.col-wordHanViet,
+.vocabulary-row:hover td.col-type,
+.vocabulary-row:hover td.col-reading,
+.vocabulary-row:hover td.col-meaning,
+.vocabulary-row:hover td.col-example,
+.vocabulary-row:hover td.col-answer,
+.vocabulary-row:hover td.col-reveal {
+  background: var(--row-hover);
+}
+
 .example-vietnamese {
   color: #3f3f46;
 }
@@ -953,9 +1049,18 @@ rt {
     flex-direction: column;
   }
 
+  .area-switcher {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
   .header-actions {
     width: 100%;
     justify-content: space-between;
+  }
+
+  .area-tabs {
+    width: 100%;
   }
 
   .kanji-table {

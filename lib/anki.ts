@@ -1,5 +1,5 @@
 import { getPlainJapanese } from "@/lib/study";
-import type { ExampleToken, VocabularyType } from "@/lib/types";
+import type { ExampleToken, VocabularyExample, VocabularyType } from "@/lib/types";
 
 // AnkiConnect runs on the machine that has Anki open. The web app's backend
 // talks to it. Allow overriding the host/port for non-default setups.
@@ -8,6 +8,8 @@ const ANKI_CONNECT_URL =
 
 export const ANKI_DECK_NAME = "Kanji Learning";
 export const ANKI_MODEL_NAME = "Kanji Vocabulary";
+export const VOCABULARY_ANKI_DECK_NAME = "Vocabulary Learning";
+export const VOCABULARY_ANKI_MODEL_NAME = "Standalone Vocabulary";
 
 // Field names are stable strings stored inside the Anki note. They mirror the
 // database column names so the mapping is obvious and stays unconfusing.
@@ -31,6 +33,37 @@ export const ANKI_FIELD_ORDER: AnkiFieldName[] = [
   ANKI_FIELDS["Loại từ"],
   ANKI_FIELDS["Example 1"],
   ANKI_FIELDS["Meaning 1"],
+];
+
+export const VOCABULARY_ANKI_FIELDS = {
+  Word: "Word",
+  Hiragana: "Hiragana",
+  "Chinese character": "Chinese character",
+  Meaning: "Meaning",
+  "Loại từ": "Loại từ",
+  "Example 1": "Example 1",
+  "Meaning 1": "Meaning 1",
+  "Example 2": "Example 2",
+  "Meaning 2": "Meaning 2",
+  "Example 3": "Example 3",
+  "Meaning 3": "Meaning 3",
+} as const;
+
+export type VocabularyAnkiFieldName =
+  (typeof VOCABULARY_ANKI_FIELDS)[keyof typeof VOCABULARY_ANKI_FIELDS];
+
+export const VOCABULARY_ANKI_FIELD_ORDER: VocabularyAnkiFieldName[] = [
+  VOCABULARY_ANKI_FIELDS.Word,
+  VOCABULARY_ANKI_FIELDS.Hiragana,
+  VOCABULARY_ANKI_FIELDS["Chinese character"],
+  VOCABULARY_ANKI_FIELDS.Meaning,
+  VOCABULARY_ANKI_FIELDS["Loại từ"],
+  VOCABULARY_ANKI_FIELDS["Example 1"],
+  VOCABULARY_ANKI_FIELDS["Meaning 1"],
+  VOCABULARY_ANKI_FIELDS["Example 2"],
+  VOCABULARY_ANKI_FIELDS["Meaning 2"],
+  VOCABULARY_ANKI_FIELDS["Example 3"],
+  VOCABULARY_ANKI_FIELDS["Meaning 3"],
 ];
 
 // English label kept next to the Vietnamese type so the card is self-explanatory
@@ -222,6 +255,37 @@ export function buildAnkiFields(input: {
   };
 }
 
+export function buildStandaloneVocabularyAnkiFields(input: {
+  word: string;
+  hanViet: string;
+  type: VocabularyType;
+  reading: string;
+  meaning: string;
+  examples: VocabularyExample[];
+}): Record<string, string> {
+  const examples = input.examples.slice(0, 3);
+
+  return {
+    [VOCABULARY_ANKI_FIELDS.Word]: input.word,
+    [VOCABULARY_ANKI_FIELDS.Hiragana]: input.reading,
+    [VOCABULARY_ANKI_FIELDS["Chinese character"]]: input.hanViet,
+    [VOCABULARY_ANKI_FIELDS.Meaning]: input.meaning,
+    [VOCABULARY_ANKI_FIELDS["Loại từ"]]: VOCABULARY_TYPE_LABEL[input.type],
+    [VOCABULARY_ANKI_FIELDS["Example 1"]]: examples[0]
+      ? buildExampleHtml(examples[0].japanese)
+      : "",
+    [VOCABULARY_ANKI_FIELDS["Meaning 1"]]: examples[0]?.vietnamese ?? "",
+    [VOCABULARY_ANKI_FIELDS["Example 2"]]: examples[1]
+      ? buildExampleHtml(examples[1].japanese)
+      : "",
+    [VOCABULARY_ANKI_FIELDS["Meaning 2"]]: examples[1]?.vietnamese ?? "",
+    [VOCABULARY_ANKI_FIELDS["Example 3"]]: examples[2]
+      ? buildExampleHtml(examples[2].japanese)
+      : "",
+    [VOCABULARY_ANKI_FIELDS["Meaning 3"]]: examples[2]?.vietnamese ?? "",
+  };
+}
+
 export const ANKI_CARD_TEMPLATES = [
   {
     Name: "Recognition",
@@ -286,4 +350,115 @@ export const ANKI_CARD_CSS = `.card {
     align-items:center;
     justify-content:center;
     min-width: 300px
+}`;
+
+export const VOCABULARY_ANKI_CARD_TEMPLATES = [
+  {
+    Name: "Vocabulary Recognition",
+    Front: `<div class='card-inside'>
+  <div class='word'>{{Word}}</div>
+  <div class='reading'>{{Hiragana}}</div>
+</div>`,
+    Back: `<div class='card-inside'>
+  <div class='word'>{{Word}}</div>
+  <div class='reading'>{{Hiragana}}</div>
+</div>
+
+<hr id=answer>
+
+<div class='han-viet'>{{Chinese character}}</div>
+<div class='meaning'>{{Meaning}}</div>
+<div class='type'>{{Loại từ}}</div>
+
+<div class='examples'>
+  <div class='example-block'>
+    <p class='example-label'>Example 1</p>
+    <p>{{Example 1}}</p>
+    <p class='translation'>{{Meaning 1}}</p>
+  </div>
+  <div class='example-block'>
+    <p class='example-label'>Example 2</p>
+    <p>{{Example 2}}</p>
+    <p class='translation'>{{Meaning 2}}</p>
+  </div>
+  <div class='example-block'>
+    <p class='example-label'>Example 3</p>
+    <p>{{Example 3}}</p>
+    <p class='translation'>{{Meaning 3}}</p>
+  </div>
+</div>`,
+  },
+];
+
+export const VOCABULARY_ANKI_CARD_CSS = `.card {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 24px;
+  background: #fdfdfd;
+  color: #111827;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.card-inside {
+  display: flex;
+  min-height: 170px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+
+.word {
+  font-size: 72px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.reading,
+.han-viet {
+  font-size: 30px;
+  font-weight: 750;
+  text-align: center;
+}
+
+.han-viet {
+  margin: 20px 0 8px;
+}
+
+.meaning {
+  margin: 12px auto;
+  max-width: 720px;
+  font-size: 24px;
+  font-weight: 400;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.type {
+  margin: 12px;
+  color: #ae6901;
+  font-size: 20px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.examples {
+  display: grid;
+  gap: 18px;
+  margin-top: 28px;
+}
+
+.example-block {
+  border-top: 1px solid #e5e7eb;
+  padding-top: 12px;
+  line-height: 1.65;
+}
+
+.example-label {
+  margin: 0 0 6px;
+  font-weight: 800;
+}
+
+.translation {
+  color: #374151;
 }`;

@@ -1,10 +1,19 @@
-import { KanjiApp } from "@/components/KanjiApp";
+import { LearningApp } from "@/components/LearningApp";
 import { getTableData } from "@/lib/data";
+import { getStandaloneVocabularyData } from "@/lib/vocab-data";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const initialData = await getTableData();
+  const [initialKanjiData, initialVocabularyData] = await Promise.all([
+    getTableData(),
+    getStandaloneVocabularyData(),
+  ]);
 
-  return <KanjiApp initialData={initialData} />;
+  return (
+    <LearningApp
+      initialKanjiData={initialKanjiData}
+      initialVocabularyData={initialVocabularyData}
+    />
+  );
 }

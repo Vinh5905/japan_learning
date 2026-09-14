@@ -91,3 +91,51 @@ model ReviewAttempt {
   @@index([vocabularyItemId, createdAt])
   @@map("review_attempts")
 }
+
+model VocabGroup {
+  id          String                    @id @default(cuid())
+  name        String
+  sortOrder   Int                       @map("order")
+  isCollapsed Boolean                   @default(true) @map("is_collapsed")
+  vocabulary  StandaloneVocabularyItem[]
+  createdAt   DateTime                  @default(now()) @map("created_at")
+  updatedAt   DateTime                  @updatedAt @map("updated_at")
+
+  @@index([sortOrder])
+  @@map("vocab_groups")
+}
+
+model StandaloneVocabularyItem {
+  id         String                         @id @default(cuid())
+  groupId    String                         @map("group_id")
+  group      VocabGroup                     @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  sortOrder  Int                            @map("order")
+  word       String                         @default("")
+  hanViet    String                         @default("") @map("han_viet")
+  type       String                         @default("danh từ")
+  reading    String                         @default("")
+  meaning    String                         @default("")
+  examples   Json                           @default("[]")
+  ankiNoteId BigInt?                        @map("anki_note_id")
+  attempts   StandaloneVocabularyAttempt[]
+  createdAt  DateTime                       @default(now()) @map("created_at")
+  updatedAt  DateTime                       @updatedAt @map("updated_at")
+
+  @@index([groupId, sortOrder])
+  @@index([groupId, word])
+  @@index([ankiNoteId])
+  @@map("standalone_vocabulary_items")
+}
+
+model StandaloneVocabularyAttempt {
+  id               String                   @id @default(cuid())
+  vocabularyItemId String                   @map("vocabulary_item_id")
+  vocabularyItem   StandaloneVocabularyItem @relation(fields: [vocabularyItemId], references: [id], onDelete: Cascade)
+  mode             ReviewMode
+  answer           String
+  isCorrect        Boolean                  @map("is_correct")
+  createdAt        DateTime                 @default(now()) @map("created_at")
+
+  @@index([vocabularyItemId, createdAt])
+  @@map("standalone_vocabulary_attempts")
+}

@@ -152,7 +152,13 @@ type AnkiStatus = {
 
 type AnkiResetStep = "none" | "first" | "second";
 
-export function KanjiApp({ initialData }: { initialData: TableData }) {
+export function KanjiApp({
+  initialData,
+  isEmbedded = false,
+}: {
+  initialData: TableData;
+  isEmbedded?: boolean;
+}) {
   const [data, setData] = useState<TableData>(() =>
     withAllGroupsCollapsed(initialData, true),
   );
@@ -888,8 +894,10 @@ export function KanjiApp({ initialData }: { initialData: TableData }) {
     });
   }
 
+  const Shell = isEmbedded ? "section" : "main";
+
   return (
-    <main className="app-shell">
+    <Shell className={isEmbedded ? "app-panel" : "app-shell"}>
       <section className="app-header" aria-label="App header">
         <div>
           <h1>Kanji Spreadsheet</h1>
@@ -1345,7 +1353,7 @@ export function KanjiApp({ initialData }: { initialData: TableData }) {
         onDelete={confirmDelete}
         onClose={() => setDeleteTarget(null)}
       />
-    </main>
+    </Shell>
   );
 }
 

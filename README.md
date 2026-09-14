@@ -17,6 +17,9 @@ The app uses English UI labels and supports Vietnamese learning content. Data is
 
 ## Current UI Flow
 
+- The first screen has two areas: `Kanji` and `Vocabulary`.
+- `Kanji` keeps the original kanji spreadsheet behavior.
+- `Vocabulary` is for standalone vocabulary lesson groups that are not attached to a kanji block.
 - Use `Add` to open the JSON import modal.
 - Paste real JSON into the modal. The app no longer pre-fills demo JSON.
 - Click `Review` to validate and see a spreadsheet-style preview.
@@ -45,6 +48,21 @@ The app uses English UI labels and supports Vietnamese learning content. Data is
 - Demo seeding and test resets are disabled by default so the real local database is not deleted accidentally.
 - Anki export saves one note per vocabulary row. Saved rows show a locked `Saved` badge and cannot be clicked again from the table.
 - The Anki dialog includes `Reset saved data`, guarded by two confirmation dialogs. It deletes all notes in the configured Anki deck if the deck exists, then clears all local Saved badges.
+
+## Standalone Vocabulary Flow
+
+- Open the `Vocabulary` area from the top switcher.
+- Use `Add` to paste vocabulary JSON.
+- The vocabulary prompt creates one lesson group per import. If the JSON does not include `group_name`, the app creates `New group`, `New group 1`, etc.
+- Vocabulary groups can be renamed inline.
+- Words can move up/down within a group and across neighboring groups.
+- Empty vocabulary groups are removed automatically after words are moved or deleted.
+- Each standalone vocabulary item supports up to three examples.
+- The vocabulary Anki setup uses a separate deck and note type:
+  - Deck: `Vocabulary Learning`
+  - Note type: `Standalone Vocabulary`
+- Vocabulary Anki card fronts show both the word and its hiragana reading.
+- Saved standalone vocabulary rows show a green locked `Saved` badge and cannot be saved again from the table.
 
 ## Commands
 
@@ -87,6 +105,12 @@ npm run db:migrate -- --name init
 ```
 
 Help: apply Prisma migrations to the local PostgreSQL database. Use a new name for future migrations, for example `npm run db:migrate -- --name add_vocabulary_type`.
+
+```bash
+make prisma-generate
+```
+
+Help: regenerate the Prisma client after schema changes. Run this if TypeScript cannot find new Prisma models.
 
 ```bash
 make clear-data
@@ -142,3 +166,4 @@ Help: run a production build and TypeScript checks.
 - The database URL is configured in `.env` and mirrored in `.env.example`.
 - `app/api/test/reset` is blocked by default and requires `ALLOW_DATABASE_RESET=true` plus the `x-kanji-reset-confirm: true` header.
 - Prisma generated client output is `lib/generated/prisma` and is ignored; run `npm run prisma:generate` if it is missing.
+- Standalone vocabulary uses `vocab_groups` and `standalone_vocabulary_items`; do not mix those rows with kanji-owned `vocabulary_items`.

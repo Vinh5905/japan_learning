@@ -6,6 +6,12 @@ import {
   moveStep,
   updateItem,
 } from "@/lib/data";
+import {
+  commitStandaloneVocabularyImport,
+  getStandaloneVocabularyData,
+  moveStandaloneVocabularyStep,
+  renameVocabGroup,
+} from "@/lib/vocab-data";
 import { buildVocabularyDuplicateId } from "@/lib/import-preview";
 import { prisma } from "@/lib/prisma";
 import type { KanjiImportItem } from "@/lib/types";
@@ -17,6 +23,9 @@ const destructiveDescribe =
 
 destructiveDescribe("database import flow", () => {
   beforeEach(async () => {
+    await prisma.standaloneVocabularyAttempt.deleteMany();
+    await prisma.standaloneVocabularyItem.deleteMany();
+    await prisma.vocabGroup.deleteMany();
     await prisma.reviewAttempt.deleteMany();
     await prisma.vocabularyItem.deleteMany();
     await prisma.kanjiItem.deleteMany();
@@ -227,6 +236,51 @@ destructiveDescribe("database import flow", () => {
     const afterKanjiDelete = await getTableData();
     expect(afterKanjiDelete.groups).toHaveLength(0);
   });
+
+  it("creates one standalone vocabulary group, renames it, and moves words across groups", async () => {
+    const first = await commitStandaloneVocabularyImport(
+      JSON.stringify({
+        vocabulary: [sampleStandaloneVocabulary("領土", "LĨNH THỔ", "りょうど")],
+      }),
+    );
+    const second = await commitStandaloneVocabularyImport(
+      JSON.stringify({
+        group_name: "Lesson 2",
+        vocabulary: [
+          sampleStandaloneVocabulary("冷やす", "LÃNH", "ひやす"),
+          sampleStandaloneVocabulary("冷える", "LÃNH", "ひえる"),
+        ],
+      }),
+    );
+
+    expect(first.ok).toBe(true);
+    expect(second.ok).toBe(true);
+
+    let data = await getStandaloneVocabularyData();
+    expect(data.groups.map((group) => group.name)).toEqual([
+      "New group",
+      "Lesson 2",
+    ]);
+
+    const renameResult = await renameVocabGroup(data.groups[0].id, "Lesson 1");
+    expect(renameResult.ok).toBe(true);
+
+    data = await getStandaloneVocabularyData();
+    const firstWordInSecondGroup = data.groups[1].vocabulary[0];
+
+    await moveStandaloneVocabularyStep(firstWordInSecondGroup.id, "up");
+
+    data = await getStandaloneVocabularyData();
+    expect(data.groups.map((group) => group.name)).toEqual([
+      "Lesson 1",
+      "Lesson 2",
+    ]);
+    expect(data.groups[0].vocabulary.map((row) => row.word)).toEqual([
+      "領土",
+      "冷やす",
+    ]);
+    expect(data.groups[1].vocabulary.map((row) => row.word)).toEqual(["冷える"]);
+  });
 });
 
 function sampleKanji(
@@ -251,6 +305,22 @@ function sampleKanji(
           japanese: [{ text: `${kanji}戸`, reading: "いど", is_target: true }],
           vietnamese: "giếng nước",
         },
+      },
+    ],
+  };
+}
+
+function sampleStandaloneVocabulary(word: string, hanViet: string, reading: string) {
+  return {
+    word,
+    han_viet: hanViet,
+    type: "danh từ",
+    reading,
+    meaning: "sample meaning",
+    examples: [
+      {
+        japanese: [{ text: word, reading, is_target: true }],
+        vietnamese: "sample",
       },
     ],
   };

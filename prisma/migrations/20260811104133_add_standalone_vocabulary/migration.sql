@@ -1,0 +1,2 @@
+-- RenameIndex
+ALTER INDEX "standalone_vocabulary_attempts_vocabulary_item_id_created_at_id" RENAME TO "standalone_vocabulary_attempts_vocabulary_item_id_created_a_idx";

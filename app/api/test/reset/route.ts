@@ -22,6 +22,9 @@ export async function POST(request: Request) {
     );
   }
 
+  await prisma.standaloneVocabularyAttempt.deleteMany();
+  await prisma.standaloneVocabularyItem.deleteMany();
+  await prisma.vocabGroup.deleteMany();
   await prisma.reviewAttempt.deleteMany();
   await prisma.vocabularyItem.deleteMany();
   await prisma.kanjiItem.deleteMany();
